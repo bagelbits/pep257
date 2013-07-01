@@ -296,7 +296,7 @@ class Error(object):
 
     def __init__(self, filename, source, docstring, context,
                  explanation, start=None, end=None):
-        self.filename = filename
+        self.filename = basename(filename)
         self.source = source
         self.docstring = docstring
         self.context = context
@@ -315,7 +315,7 @@ class Error(object):
         self.end_line, self.end_char = rel_pos(self.end, self.source)
 
     def __str__(self):
-        s = self.filename + ':%d:%d' % (self.line, self.char)
+        s = self.filename + ':%d:%d PEP257' % (self.line, self.char)
         if self.range:
             s += '..%d:%d' % (self.end_line, self.end_char)
         if self.explain:
