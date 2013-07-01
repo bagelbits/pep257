@@ -459,6 +459,52 @@ def check_modules_have_docstrings(module_docstring, context, is_script):
         return True
 
 
+def check_def_documents_parameteres(def_docstring, context, is_script):
+    """Definitions must document parameters in docstrings.
+
+    All functions and methods must document each of the parameters in the
+    NumPy format.
+
+    https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
+
+    Parameters
+    ----------
+    def_docstring: str
+        The docstring for the function, or None
+    context: str
+        The string text of the function code
+    is_script: bool
+        Whether or not this is a script
+
+    """
+
+    # If it does not exist return
+    if not def_docstring:
+        return 0, len(context.split('\n')[0])
+
+    exec(context)
+    split = context.split()
+    name_args = split[1]
+    name = name_args.split('(')[0]
+
+    method = locals()[name]
+
+    params = method.func_code.co_varnames
+
+    if len(params) > 0:
+        if def_docstring.find('Parameters\n    ----------\n') == -1:
+            print "Forgot to define parameters section."""
+
+    for p in params:
+        # name: type
+        #    description
+        reg = p + ': \w+\n\s+\w+'
+        if not re.search(reg, def_docstring):
+            print "[Method %s] Forgot to document parameter %s" % (name, p)
+
+    return True
+
+
 def check_def_has_docstring(def_docstring, context, is_script):
     """Exported definitions should have docstrings.
 
