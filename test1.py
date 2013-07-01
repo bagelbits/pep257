@@ -1,6 +1,11 @@
 """This is a simple program."""
 
 
+def request_other(request, param2):
+    """Do a thing."""
+    print 5
+
+
 def request_only_param(request):
     """Do a thing."""
     print 5
