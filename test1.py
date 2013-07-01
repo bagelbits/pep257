@@ -1,6 +1,11 @@
 """This is a simple program."""
 
 
+def request_only_param(request):
+    """Do a thing."""
+    print 5
+
+
 def self_only_no_param(self):
     """Do a thing."""
     print self

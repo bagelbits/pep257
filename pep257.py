@@ -495,8 +495,10 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
     # so we just take the first for the number of arguments.
     params = method.func_code.co_varnames[:method.func_code.co_argcount]
 
+    IGNORED_PARAMETERS = ["self", "request"]
+
     # Ignore self if it is the only param
-    if len(params) == 1 and params[0] == "self":
+    if len(params) == 1 and params[0] in IGNORED_PARAMETERS:
         return
 
     if len(params) > 0:
@@ -506,7 +508,7 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     for p in params:
         # Ignore self as a parameter
-        if p == "self":
+        if p in IGNORED_PARAMETERS:
             continue
 
         # name: type
