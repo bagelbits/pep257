@@ -499,7 +499,7 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     if len(params) > 0:
         if def_docstring.find('Parameters\n    ----------\n') == -1:
-            print "[Method %s] Forgot to define parameters section." % (name)
+            #print "[Method %s] Forgot to define parameters section." % (name)
             fail = True
 
     for p in params:
@@ -511,7 +511,7 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
         #    description
         reg = p + ': \w+\n\s+\w+'
         if not re.search(reg, def_docstring):
-            print "[Method %s] Forgot to document parameter %s" % (name, p)
+            #print "[Method %s] Forgot to document parameter %s" % (name, p)
             fail = True
 
     if fail:
