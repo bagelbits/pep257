@@ -410,9 +410,9 @@ def parse_options():
 
 
 def print_error(message):
-    sys.stderr.write(message)
-    sys.stderr.write('\n')
-    sys.stderr.flush()
+    sys.stdout.write(message)
+    sys.stdout.write('\n')
+    sys.stdout.flush()
 
 
 def main(options, arguments):
