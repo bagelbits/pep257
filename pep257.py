@@ -491,15 +491,17 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     method = locals()[name]
 
-    params = method.func_code.co_varnames
+    # co_varnames gets all the parameters, locals. We dont want the locals
+    # so we just take the first for the number of arguments.
+    params = method.func_code.co_varnames[:method.func_code.co_argcount]
 
     # Ignore self if it is the only param
     if len(params) == 1 and params[0] == "self":
         return
 
     if len(params) > 0:
-        if def_docstring.find('Parameters\n    ----------\n') == -1:
-            #print "[Method %s] Forgot to define parameters section." % (name)
+        if not re.search('Parameters\n\s+----------\n', def_docstring):
+            print "[Method %s] Forgot to define parameters section." % (name)
             fail = True
 
     for p in params:
@@ -511,7 +513,7 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
         #    description
         reg = p + ': \w+\n\s+\w+'
         if not re.search(reg, def_docstring):
-            #print "[Method %s] Forgot to document parameter %s" % (name, p)
+            print "[Method %s] Forgot to document parameter %s" % (name, p)
             fail = True
 
     if fail:
