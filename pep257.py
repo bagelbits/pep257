@@ -478,6 +478,8 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     """
 
+    fail = False
+
     # If it does not exist return
     if not def_docstring:
         return 0, len(context.split('\n')[0])
@@ -491,18 +493,29 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     params = method.func_code.co_varnames
 
+    # Ignore self if it is the only param
+    if len(params) == 1 and params[0] == "self":
+        return
+
     if len(params) > 0:
         if def_docstring.find('Parameters\n    ----------\n') == -1:
-            print "Forgot to define parameters section."""
+            print "[Method %s] Forgot to define parameters section." % (name)
+            fail = True
 
     for p in params:
+        # Ignore self as a parameter
+        if p == "self":
+            continue
+
         # name: type
         #    description
         reg = p + ': \w+\n\s+\w+'
         if not re.search(reg, def_docstring):
             print "[Method %s] Forgot to document parameter %s" % (name, p)
+            fail = True
 
-    return True
+    if fail:
+        return True
 
 
 def check_def_has_docstring(def_docstring, context, is_script):

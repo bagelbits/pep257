@@ -1,6 +1,16 @@
 """This is a simple program."""
 
 
+def self_only_no_param(self):
+    """Do a thing."""
+    print self
+
+
+def do_thing(self, y):
+    """Do a thing."""
+    print y
+
+
 def subtract(k, l=0):
     print k - l
 
