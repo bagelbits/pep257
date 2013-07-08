@@ -478,22 +478,26 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     """
 
-    fail = False
+    # I use ___ to prefix locals here, because we had a naming conflict with
+    # a function called name and a local variable called name, so I want to
+    # avoid all naming conflicts.
+    ___fail = False
 
     # If it does not exist return
     if not def_docstring:
         return 0, len(context.split('\n')[0])
 
-    exec(context)
-    split = context.split()
-    name_args = split[1]
-    name = name_args.split('(')[0]
+    ___split = context.split()
+    ___name_args = ___split[1]
+    ___name = ___name_args.split('(')[0]
 
-    method = locals()[name]
+    exec(context)
+
+    ___method = locals()[___name]
 
     # co_varnames gets all the parameters, locals. We dont want the locals
     # so we just take the first for the number of arguments.
-    params = method.func_code.co_varnames[:method.func_code.co_argcount]
+    params = ___method.func_code.co_varnames[:___method.func_code.co_argcount]
 
     IGNORED_PARAMETERS = ["self", "request"]
 
@@ -503,8 +507,9 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
 
     if len(params) > 0:
         if not re.search('Parameters\n\s+----------\n', def_docstring):
-            print "[Method %s] Forgot to define parameters section." % (name)
-            fail = True
+            print "[Method %s] Forgot to define parameters section." % (
+                ___name)
+            ___fail = True
 
     for p in params:
         # Ignore self as a parameter
@@ -515,10 +520,11 @@ def check_def_documents_parameteres(def_docstring, context, is_script):
         #    description
         reg = p + ': \w+\n\s+\w+'
         if not re.search(reg, def_docstring):
-            print "[Method %s] Forgot to document parameter %s" % (name, p)
-            fail = True
+            print "[Method %s] Forgot to document parameter %s" % (
+                ___name, p)
+            ___fail = True
 
-    if fail:
+    if ___fail:
         return True
 
 
