@@ -65,6 +65,9 @@ from os.path import join as path_join
 import re
 import sys
 import tokenize as tk
+# need to import datetime to fix a bug
+# @author Zach Galant 7/15/2014
+import datetime
 
 
 try:
