@@ -967,9 +967,9 @@ class PEP257Checker(object):
         # print dir(function)
         # print function._human
         # print function.source
-        # I use ___ to prefix locals here, because we had a naming conflict with
-        # a function called name and a local variable called name, so I want to
-        # avoid all naming conflicts.
+        # I use ___ to prefix locals here, because we had a naming conflict
+        # with a function called name and a local variable called name, so I
+        # want to avoid all naming conflicts.
         ___fail = False
 
         # If it does not exist return
