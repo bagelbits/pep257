@@ -16,6 +16,8 @@ var
 sdist
 develop-eggs
 .installed.cfg
+.cache
+MANIFEST
 
 # Installer logs
 pip-log.txt
@@ -35,3 +37,15 @@ docs/_*
 .project
 .pydevproject
 .settings
+
+# PyCharm files
+.idea
+
+# virtualenv
+venv/
+
+# generated rst
+docs/snippets/error_code_table.rst
+
+# PyCharm files
+.idea

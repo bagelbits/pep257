@@ -1,316 +1,291 @@
-"""Test-suite uses py.test (pip install pytest)."""
 # -*- coding: utf-8 -*-
-import os
-import sys
-from contextlib import contextmanager
-try:
-    from StringIO import StringIO
-except ImportError:
-    # Python 3.0 and later
-    from io import StringIO
 
+"""Use tox or py.test to run the test-suite."""
+
+from __future__ import with_statement
+from collections import namedtuple
+
+import sys
+import os
 import mock
-import pep8
+import shlex
+import pytest
+import shutil
+import tempfile
+import textwrap
+import subprocess
 
 import pep257
 
-
-FILES = ['pep257.py', 'test_pep257.py']
-default_options = mock.Mock(explain=False, range=False, quote=False)
+__all__ = ()
 
 
-@contextmanager
-def capture_stdout(destination):
-    real_stdout = sys.stdout
-    sys.stdout = destination
-    yield
-    sys.stdout = real_stdout
+class Pep257Env():
+
+    """An isolated environment where pep257.py can be run.
+
+    Since running pep257.py as a script is affected by local config files, it's
+    important that tests will run in an isolated environment. This class should
+    be used as a context manager and offers utility methods for adding files
+    to the environment and changing the environment's configuration.
+
+    """
+
+    Result = namedtuple('Result', ('out', 'err', 'code'))
+
+    def __init__(self):
+        self.tempdir = None
+
+    def write_config(self, **kwargs):
+        """Change the environment's config file."""
+        with open(os.path.join(self.tempdir, 'tox.ini'), 'wt') as conf:
+            conf.write("[pep257]\n")
+            for k, v in kwargs.items():
+                conf.write("{0} = {1}\n".format(k.replace('_', '-'), v))
+
+    def open(self, path, *args, **kwargs):
+        """Open a file in the environment.
+
+        The file path should be relative to the base of the environment.
+
+        """
+        return open(os.path.join(self.tempdir, path), *args, **kwargs)
+
+    def invoke_pep257(self, args=""):
+        """Run pep257.py on the environment base folder with the given args."""
+        pep257_location = os.path.join(os.path.dirname(__file__), 'pep257')
+        cmd = shlex.split("python {0} {1} {2}"
+                          .format(pep257_location, self.tempdir, args),
+                          posix=False)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        out, err = p.communicate()
+        return self.Result(out=out.decode('utf-8'),
+                           err=err.decode('utf-8'),
+                           code=p.returncode)
+
+    def __enter__(self):
+        self.tempdir = tempfile.mkdtemp()
+        # Make sure we won't be affected by other config files
+        self.write_config()
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        shutil.rmtree(self.tempdir)
 
 
 def test_pep257_conformance():
-    assert pep257.check_files(FILES) == []
+    errors = list(pep257.check(['pep257.py', 'test_pep257.py']))
+    print(errors)
+    assert errors == []
 
 
-def test_pep8_conformance():
-    assert pep8.StyleGuide().check_files(FILES).total_errors == 0
+def test_ignore_list():
+    function_to_check = textwrap.dedent('''
+        def function_with_bad_docstring(foo):
+            """ does spacinwithout a period in the end
+            no blank line after one-liner is bad. Also this - """
+            return foo
+    ''')
+    expected_error_codes = set(('D100', 'D400', 'D401', 'D205', 'D209',
+                                'D210'))
+    mock_open = mock.mock_open(read_data=function_to_check)
+    with mock.patch('pep257.tokenize_open', mock_open, create=True):
+        errors = tuple(pep257.check(['filepath']))
+        error_codes = set(error.code for error in errors)
+        assert error_codes == expected_error_codes
+
+    # We need to recreate the mock, otherwise the read file is empty
+    mock_open = mock.mock_open(read_data=function_to_check)
+    with mock.patch('pep257.tokenize_open', mock_open, create=True):
+        errors = tuple(pep257.check(['filepath'], ignore=['D100', 'D202']))
+        error_codes = set(error.code for error in errors)
+        assert error_codes == expected_error_codes - set(('D100', 'D202'))
 
 
-def test_get_summary_line_info():
-    s1 = '''"""First line summary."""'''
-    s2 = '''"""First line summary.
-    With subsequent line.
-    """'''
-    s3 = '''""""""'''
-    s4 = '''"""
-    Second line summary.
-    """'''
-    s5 = '''"""
-    Second line summary.
-    With subsquent line.
-    """'''
-    assert pep257.get_summary_line_info(s1) == ('First line summary.', 0)
-    assert pep257.get_summary_line_info(s2) == ('First line summary.', 0)
-    assert pep257.get_summary_line_info(s3) == ('', 0)
-    assert pep257.get_summary_line_info(s4) == ('Second line summary.', 1)
-    assert pep257.get_summary_line_info(s5) == ('Second line summary.', 1)
+def test_config_file():
+    """Test that options are correctly loaded from a config file.
 
-
-def test_parse_docstring():
-    s1 = '''def foo():  # o hai comment
-    """docstring"""
-    2 + 2'''
-    assert pep257.parse_docstring(s1) == '"""docstring"""'
-
-    s2 = '''def foo():  # o hai comment
-    2 + 2'''
-    assert pep257.parse_docstring(s2) is None
-
-    assert pep257.parse_docstring("def foo():pass") is None
-    # TODO
-    #assert pep257.parse_docstring("def bar():'doc';pass") == "'doc'"
-
-
-def test_abs_pos():
-    assert pep257.abs_pos((1, 0), 'foo') == 0
-    assert pep257.abs_pos((1, 2), 'foo') == 2
-    assert pep257.abs_pos((2, 0), 'foo\nbar') == 4
-
-
-def test_rel_pos():
-    assert pep257.rel_pos(0, 'foo') == (1, 0)
-    assert pep257.rel_pos(2, 'foo') == (1, 2)
-    assert pep257.rel_pos(4, 'foo\nbar') == (2, 0)
-    assert pep257.rel_pos(6, 'foo\nbar') == (2, 2)
-
-
-def test_parse_functions():
-    parse = pep257.parse_functions
-    assert parse('') == []
-    # TODO assert pf('def foo():pass') == ['def foo():pass']
-    assert parse('def foo():\n    pass\n') == ['def foo():\n    pass\n']
-    assert parse('def foo():\n  pass') == ['def foo():\n  pass']
-    f1 = '''def foo():\n  pass\ndef bar():\n  pass'''
-    assert parse(f1) == ['def foo():\n  pass\n',
-                         'def bar():\n  pass']
-    f2 = '''def foo():\n  pass\noh, hai\ndef bar():\n  pass'''
-    assert parse(f2) == ['def foo():\n  pass\n',
-                         'def bar():\n  pass']
-
-
-def test_parse_methods():
-    parse = pep257.parse_methods
-    assert parse('') == []
-    m1 = '''class Foo:
-    def m1():
-        pass
-    def m2():
-        pass'''
-    assert parse(m1) == ['def m1():\n        pass\n    ',
-                         'def m2():\n        pass']
-    m2 = '''class Foo:
-    def m1():
-        pass
-    attribute
-    def m2():
-        pass'''
-    assert parse(m2) == ['def m1():\n        pass\n    ',
-                         'def m2():\n        pass']
-
-
-def test_check_triple_double_quotes():
-    check = pep257.check_triple_double_quotes
-    assert check("'''Not using triple douple quotes'''", None, None)
-    assert not check('"""Using triple double quotes"""', None, None)
-    assert not check('r"""Using raw triple double quotes"""', None, None)
-    assert not check('u"""Using unicode triple double quotes"""', None, None)
-
-
-def test_check_backslashes():
-    check = pep257.check_backslashes
-    assert check('"""backslash\\here""""', None, None)
-    assert not check('r"""backslash\\here""""', None, None)
-
-
-def test_check_unicode_docstring():
-    check = pep257.check_unicode_docstring
-    assert not check('"""No Unicode here."""', None, None)
-    assert not check('u"""Здесь Юникод: øπΩ≈ç√∫˜µ≤"""', None, None)
-    assert check('"""Здесь Юникод: øπΩ≈ç√∫˜µ≤"""', None, None)
-
-
-def test_check_ends_with_period():
-    check = pep257.check_ends_with_period
-    s1 = '"""Should end with a period"""'
-    s2 = '"""Should end with a period."""'
-    s3 = '''"""
-        Should end with a period
-        """'''
-    s4 = '''"""
-        Should end with a period.
-        """'''
-    assert check(s1, None, None)
-    assert not check(s2, None, None)
-    assert check(s3, None, None)
-    assert not check(s4, None, None)
-
-
-def test_check_blank_before_after_class():
-    check = pep257.check_blank_before_after_class
-    c1 = '''class Perfect(object):
-
-    """This should work perfectly."""
-
-    pass'''
-    assert not check('"""This should work perfectly."""', c1, False)
-
-    c2 = '''class BadTop(object):
-    """This should fail due to a lack of whitespace above."""
-
-    pass'''
-    assert check('"""This should fail due to a lack of whitespace above."""',
-                 c2, False)
-    c3 = '''class BadBottom(object):
-
-    """This should fail due to a lack of whitespace below."""
-    pass'''
-    assert check('"""This should fail due to a lack of whitespace below."""',
-                 c3, False)
-    c4 = '''class GoodWithNoFollowingWhiteSpace(object):
-
-    """This should work."""'''
-    assert not check('"""This should work."""',
-                     c4, False)
-    c5 = '''class GoodWithFollowingWhiteSpace(object):
-
-    """This should work."""
-
-
-'''
-    assert not check('"""This should work."""', c5, False)
-
-    c6 = '''class Perfect(object):
-
-    """This should work perfectly."""
-
-    def foo(self):
-        """This should work perfectly."""
-        pass
-
-    '''
-    assert not check('"""This should work perfectly."""', c6, False)
-
-
-def test_check_blank_after_summary():
-    check = pep257.check_blank_after_summary
-    s1 = '''"""Blank line missing after one-line summary.
-    ....................
-    """'''
-    s2 = '''"""Blank line missing after one-line summary.
-
-    """'''
-    s3 = '''"""
-    Blank line missing after one-line summary.
-    ....................
-    """'''
-    s4 = '''"""
-    Blank line missing after one-line summary.
-
-    """'''
-    assert check(s1, None, None)
-    assert not check(s2, None, None)
-    assert check(s3, None, None)
-    assert not check(s4, None, None)
-
-
-def test_check_indent():
-    check = pep257.check_indent
-    context = '''def foo():
-    """Docstring.
-
-    Properly indented.
+    This test create a temporary directory and creates two files in it: a
+    Python file that has two pep257 violations (D100 and D103) and a config
+    file (tox.ini). This test alternates settings in the config file and checks
+    that pep257 gives the correct output.
 
     """
-    pass'''
-    assert not check('"""%s"""' % context.split('"""')[1], context, None)
-    context = '''def foo():
-    """Docstring.
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent("""\
+                def foo():
+                    pass
+            """))
 
-Not Properly indented.
+        env.write_config(ignore='D100', verbose=True)
+        out, err, code = env.invoke_pep257()
+        assert code == 1
+        assert 'D100' not in err
+        assert 'D103' in err
+        assert 'example.py' in out
 
-    """
-    pass'''
-    assert check('"""%s"""' % context.split('"""')[1], context, None)
+        env.write_config(ignore='', verbose=True)
+        out, err, code = env.invoke_pep257()
+        assert code == 1
+        assert 'D100' in err
+        assert 'D103' in err
+        assert 'example.py' in out
 
+        env.write_config(ignore='D100,D103', verbose=False)
+        out, err, code = env.invoke_pep257()
+        assert code == 0
+        assert 'D100' not in err
+        assert 'D103' not in err
+        assert 'example.py' not in out
 
-def test_check_blank_after_last_paragraph():
-    check = pep257.check_blank_after_last_paragraph
-    s1 = '''"""Multiline docstring should end with 1 blank line.
-
-    Blank here:
-
-    """'''
-    s2 = '''"""Multiline docstring should end with 1 blank line.
-
-    No blank here.
-    """'''
-    assert not check(s1, None, None)
-    assert check(s2, None, None)
-
-
-def SKIP_test_failed_open():
-    filename = "non-existent-file.py"
-    assert not os.path.exists(filename)
-
-    captured = StringIO()
-    with capture_stdout(captured):
-        pep257.main(default_options, [filename])
-
-    captured_lines = captured.getvalue().strip().split('\n')
-    print captured_lines
-    assert captured_lines == [
-        '=' * 80,
-        'Note: checks are relaxed for scripts (with #!) compared to modules',
-        'Error opening file non-existent-file.py'
-    ]
+        env.write_config(ignore='', verbose=False)
+        out, err, code = env.invoke_pep257()
+        assert code == 1
+        assert 'D100' in err
+        assert 'D103' in err
+        assert 'example.py' not in out
 
 
-def SKIP_test_failed_read():
-    captured = StringIO()
+def test_count():
+    """Test that passing --count to pep257 correctly prints the error num."""
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent("""\
+                def foo():
+                    pass
+            """))
 
-    open_mock = mock.MagicMock()
-    handle = mock.MagicMock()
-    handle.read.side_effect = IOError('Stubbed read error')
-    open_mock.__enter__.return_value = handle
-    open_mock.return_value = handle
-
-    with capture_stdout(captured):
-        with mock.patch('__builtin__.open', open_mock, create=True):
-            pep257.main(default_options, ['dummy-file.py'])
-
-    open_mock.assert_called_once_with('dummy-file.py')
-    handle.close.assert_called_once_with()
-
-    captured_lines = captured.getvalue().strip().split('\n')
-    assert captured_lines == [
-        '=' * 80,
-        'Note: checks are relaxed for scripts (with #!) compared to modules',
-        'Error reading file dummy-file.py',
-    ]
+        out, err, code = env.invoke_pep257(args='--count')
+        assert code == 1
+        assert '2' in out
 
 
-def test_opened_files_are_closed():
-    files_opened = []
-    real_open = open
+def test_select_cli():
+    """Test choosing error codes with --select in the CLI."""
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent("""\
+                def foo():
+                    pass
+            """))
 
-    def open_wrapper(*args, **kw):
-        opened_file = mock.MagicMock(wraps=real_open(*args, **kw))
-        files_opened.append(args[0])
-        return opened_file
-    open_mock = mock.MagicMock(side_effect=open_wrapper)
-    open_mock.__enter__.side_effect = open_wrapper
+        _, err, code = env.invoke_pep257(args="--select=D100")
+        assert code == 1
+        assert 'D100' in err
+        assert 'D103' not in err
 
-    with mock.patch('__builtin__.open', open_mock, create=True):
-        pep257.main(default_options, ['pep257.py'])
 
-    assert len(files_opened) == 1
-    assert files_opened[0].endswith('pep257.py')
+def test_select_config():
+    """Test choosing error codes with --select in the config file."""
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent("""\
+                def foo():
+                    pass
+            """))
+
+        env.write_config(select="D100")
+        _, err, code = env.invoke_pep257()
+        assert code == 1
+        assert 'D100' in err
+        assert 'D103' not in err
+
+
+def test_add_select_cli():
+    """Test choosing error codes with --add-select in the CLI."""
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent("""\
+                class Foo(object):
+                    def foo():
+                        pass
+            """))
+
+        env.write_config(select="D100")
+        _, err, code = env.invoke_pep257(args="--add-select=D101")
+        assert code == 1
+        assert 'D100' in err
+        assert 'D101' in err
+        assert 'D103' not in err
+
+
+def test_add_ignore_cli():
+    """Test choosing error codes with --add-ignore in the CLI."""
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent("""\
+                class Foo(object):
+                    def foo():
+                        pass
+            """))
+
+        env.write_config(select="D100,D101")
+        _, err, code = env.invoke_pep257(args="--add-ignore=D101")
+        assert code == 1
+        assert 'D100' in err
+        assert 'D101' not in err
+        assert 'D103' not in err
+
+
+def test_conflicting_select_ignore_config():
+    """Test that select and ignore are mutually exclusive."""
+    with Pep257Env() as env:
+        env.write_config(select="D100", ignore="D101")
+        _, err, code = env.invoke_pep257()
+        assert code == 2
+        assert 'mutually exclusive' in err
+
+
+def test_conflicting_select_convention_config():
+    """Test that select and convention are mutually exclusive."""
+    with Pep257Env() as env:
+        env.write_config(select="D100", convention="pep257")
+        _, err, code = env.invoke_pep257()
+        assert code == 2
+        assert 'mutually exclusive' in err
+
+
+def test_conflicting_ignore_convention_config():
+    """Test that select and convention are mutually exclusive."""
+    with Pep257Env() as env:
+        env.write_config(ignore="D100", convention="pep257")
+        _, err, code = env.invoke_pep257()
+        assert code == 2
+        assert 'mutually exclusive' in err
+
+
+def test_unicode_raw():
+    """Test acceptance of unicode raw docstrings for python 2.x."""
+    if sys.version_info[0] >= 3:
+        return  # ur"" is a syntax error in python 3.x
+
+    # This is all to avoid a syntax error for python 3.2
+    from codecs import unicode_escape_decode
+
+    def u(x):
+        return unicode_escape_decode(x)[0]
+
+    with Pep257Env() as env:
+        with env.open('example.py', 'wt') as example:
+            example.write(textwrap.dedent(u('''\
+                # -*- coding: utf-8 -*-
+                def foo():
+                    ur"""Check unicode: \u2611 and raw: \\\\\\\\."""
+            ''').encode('utf-8')))
+        env.write_config(ignore='D100', verbose=True)
+        out, err, code = env.invoke_pep257()
+        assert code == 0
+        assert 'D301' not in err
+        assert 'D302' not in err
+
+
+def test_missing_docstring_in_package():
+    with Pep257Env() as env:
+        with env.open('__init__.py', 'wt') as init:
+            pass  # an empty package file
+        out, err, code = env.invoke_pep257()
+        assert code == 1
+        assert 'D100' not in err  # shouldn't be treated as a module
+        assert 'D104' in err  # missing docstring in package
