@@ -19,9 +19,6 @@ import logging
 import tokenize as tk
 from itertools import takewhile, dropwhile, chain
 from optparse import OptionParser
-# need to import datetime to fix a bug
-# @author Zach Galant 7/15/2014
-import datetime
 from re import escape
 from re import compile as re
 import itertools
@@ -962,7 +959,8 @@ class PEP257Checker(object):
             The docstring for the function, or None
 
         """
-        if not isinstance(function, Method):
+        if (not isinstance(function, Method) and
+                not isinstance(function, Function)):
             return
 
         # I use ___ to prefix locals here, because we had a naming conflict
