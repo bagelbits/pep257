@@ -984,8 +984,11 @@ class PEP257Checker(object):
         # Emptry string is for when there are no params.
         IGNORED_PARAMETERS = ["self", "request", "*args", "**kwargs", ""]
 
+        # Just drop all ignored parameters. This is a lot cleaner.
+        params = list(set(params) - set(IGNORED_PARAMETERS))
+
         # Ignore self if it is the only param
-        if len(params) == 1 and params[0] in IGNORED_PARAMETERS:
+        if len(params) == 0:
             return
 
         if len(params) > 0:
