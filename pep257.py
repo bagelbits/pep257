@@ -979,6 +979,7 @@ class PEP257Checker(object):
         # exec(function)
 
         params = ___split[1].split("):")[0].split(", ")
+        params = [entry.split("=")[0] for entry in params]
 
         IGNORED_PARAMETERS = ["self", "request", "*args", "**kwargs"]
 
