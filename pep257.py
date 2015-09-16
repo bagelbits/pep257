@@ -981,7 +981,8 @@ class PEP257Checker(object):
         params = ___split[1].split("):")[0].split(", ")
         params = [entry.split("=")[0] for entry in params]
 
-        IGNORED_PARAMETERS = ["self", "request", "*args", "**kwargs"]
+        # Emptry string is for when there are no params.
+        IGNORED_PARAMETERS = ["self", "request", "*args", "**kwargs", ""]
 
         # Ignore self if it is the only param
         if len(params) == 1 and params[0] in IGNORED_PARAMETERS:
