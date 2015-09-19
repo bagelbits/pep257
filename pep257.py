@@ -953,7 +953,7 @@ class PEP257Checker(object):
 
         Parameters
         ----------
-        definition: str
+        function: str
             The string text of the function code
         docstring: str
             The docstring for the function, or None
@@ -972,13 +972,19 @@ class PEP257Checker(object):
         if not docstring:
             return
 
-        function_def = function.source.split("\n")[0].strip()
+        # In case of multline function definition with long parameters, we need
+        # to reconstruct the definition from source.
+        functions_source = function.source.split("\n")
+        function_def = ''
+        while not function_def.endswith(":"):
+            function_def += functions_source.pop(0)
+        function_def = function_def.strip()
         ___split = function_def.split("(")
         ___name = ___split[0].split()[1]
 
-        # exec(function)
-
-        params = ___split[1].split("):")[0].split(", ")
+        params = ___split[1].split("):")[0]
+        # We also need to clean up any extra spaces
+        params = re(', +').split(params)
         params = [entry.split("=")[0] for entry in params]
 
         # Emptry string is for when there are no params.
@@ -1006,6 +1012,8 @@ class PEP257Checker(object):
             #    description
             reg = escape(p) + ': \w+\n\s+\w+'
             if not re(reg).search(docstring):
+                # print function.source
+                print params
                 print "[Method %s] Forgot to document parameter %s" % (
                     ___name, p)
                 ___fail = True
