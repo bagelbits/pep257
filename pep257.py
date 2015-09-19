@@ -974,10 +974,10 @@ class PEP257Checker(object):
 
         # In case of multline function definition with long parameters, we need
         # to reconstruct the definition from source.
-        functions_source = function.source.split("\n")
+        function_source = function.source.split("\n")
         function_def = ''
         while not function_def.endswith(":"):
-            function_def += functions_source.pop(0)
+            function_def += function_source.pop(0)
         function_def = function_def.strip()
         ___split = function_def.split("(")
         ___name = ___split[0].split()[1]
