@@ -1012,8 +1012,6 @@ class PEP257Checker(object):
             #    description
             reg = escape(p) + ': \w+\n\s+\w+'
             if not re(reg).search(docstring):
-                # print function.source
-                print params
                 print "[Method %s] Forgot to document parameter %s" % (
                     ___name, p)
                 ___fail = True
